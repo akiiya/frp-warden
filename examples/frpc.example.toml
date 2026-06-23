@@ -1,0 +1,36 @@
+# frpc 客户端配置示例 —— 配合 frp-warden 使用。
+#
+# 重要:本文件仅为示例,真实配置建议从 WebUI 管理页面生成(租户管理 → frpc 配置)。
+# 创建租户或重置 token 时,系统会一次性返回含真实 token 的完整 frpc.toml。
+#
+# 部署说明:frpc 运行在随身 WiFi / Debian 等客户端设备上,不运行 frps 或 frp-warden。
+
+# frps 服务器地址(公网服务器 IP 或域名)。
+serverAddr = "frp.example.com"
+# frps 控制端口。
+serverPort = 7000
+
+# 租户标识,对应 frp-warden 中创建的 tenant code。
+user = "ufi001"
+
+# 租户 token。请粘贴创建租户或重置 token 时显示的一次性 token。
+# 数据库只保存 token hash,无法恢复明文。如忘记 token,请在 WebUI 中重置。
+metadatas.token = "请粘贴创建/重置时显示的一次性 token"
+
+# HTTP proxy 示例。将本地 8080 端口通过子域名暴露到公网。
+[[proxies]]
+name = "web"
+type = "http"
+localIP = "127.0.0.1"
+localPort = 8080
+# subdomain 对应 frp-warden 中授权的 subdomain 资源。
+subdomain = "ufi001"
+
+# TCP proxy 示例。将本地 22 端口(SSH)通过公网端口 61001 暴露。
+[[proxies]]
+name = "ssh"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 22
+# remotePort 对应 frp-warden 中授权的 tcp_port 资源。
+remotePort = 61001

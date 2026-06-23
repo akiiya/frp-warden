@@ -1,0 +1,32 @@
+# frps 配置示例 —— 配合 frp-warden 使用。
+#
+# 部署说明:frps 与 frp-warden 部署在同一台公网服务器/VPS 上。
+# frps 负责隧道转发,frp-warden 负责授权控制。
+#
+# 详细配置说明见 docs/FRPS_SETUP.md。
+
+# frps 控制端口,frpc 客户端连接此端口。
+bindPort = 7000
+
+# HTTP 虚拟主机端口。访问 http://xxx.frp.example.com:8080 时,frps 将请求转发给对应 frpc。
+# 如果前面有 Nginx/Caddy 反代,可以改成非标准端口(如 8080)。
+vhostHTTPPort = 80
+
+# HTTPS 虚拟主机端口(可选)。如果需要 HTTPS,取消注释并配置。
+# vhostHTTPSPort = 443
+
+# subdomain 泛域名根。必须与 frp-warden 配置的 frp.subdomain_host 一致。
+# 例如:frp.example.com,则 tenant 可使用 xxx.frp.example.com。
+subdomainHost = "frp.example.com"
+
+# frps server plugin 配置。frps 通过 HTTP 调用 frp-warden 进行授权校验。
+[[httpPlugins]]
+name = "frp-warden"
+# plugin 接口地址。默认仅回环,只允许本机 frp-warden 调用,切勿暴露公网。
+addr = "127.0.0.1:9000"
+path = "/plugin/frp"
+# 转发的操作。Login/NewProxy/Ping 是授权校验的关键节点。
+ops = ["Login", "NewProxy", "Ping"]
+
+# 注意:不要在此配置公共 auth.token。frp-warden 通过 plugin 机制为每个 tenant 独立校验 token。
+# 如果同时配置了 frps 的 auth.token,frpc 也需要配置相同的 token,会导致额外的配置负担。

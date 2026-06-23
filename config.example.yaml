@@ -1,0 +1,36 @@
+# frp-warden 配置文件示例。
+# 首次启动时,如果 config.yaml 不存在,程序会自动生成默认配置。
+# 本文件仅供参考,请根据实际环境修改。
+
+server:
+  # 管理后台监听地址。可绑定局域网或公网,建议用反向代理 + HTTPS 保护。
+  admin_addr: "0.0.0.0:8080"
+  # frps plugin 接口监听地址。默认仅回环,只允许本机 frps 调用,切勿暴露公网。
+  plugin_addr: "127.0.0.1:9000"
+
+database:
+  # 数据库驱动:sqlite(默认,推荐) / mysql / mariadb / postgresql。
+  # 当前仅 sqlite 完整可用;其余驱动仅连接骨架,迁移尚未实现。
+  driver: "sqlite"
+  # SQLite 数据库文件路径。首次启动时自动创建数据目录和数据库。
+  dsn: "./data/frp-warden.db"
+
+security:
+  # 会话签名密钥。为空时首次启动自动生成(至少 32 字节熵)并写回配置文件。
+  # 请勿手动填写弱密钥。
+  session_secret: ""
+  # 初始管理员用户名。首次启动时自动创建该管理员,密码随机生成并一次性显示。
+  initial_admin_username: "admin"
+
+frp:
+  # frps 服务器地址(客户端连接地址)。
+  server_addr: "frp.example.com"
+  # frps 控制端口。
+  server_port: 7000
+  # subdomain 泛域名根(需与 frps.toml 的 subdomainHost 一致)。
+  # 例如:frp.example.com
+  subdomain_host: ""
+
+log:
+  # 日志级别:debug / info / warn / error。
+  level: "info"

@@ -1,0 +1,56 @@
+# ---- Go build artifacts ----
+/frp-warden
+/frp-warden.exe
+/dist/
+*.exe
+*.test
+*.out
+*.prof
+
+# ---- Runtime data / databases ----
+/data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# ---- Local config (do not commit operator config / secrets) ----
+/config.yaml
+/config.yml
+/frp-warden.yaml
+/frp-warden.yml
+*.local.yaml
+*.local.yml
+.env
+.env.*
+
+# ---- Frontend ----
+node_modules/
+web/node_modules/
+web/dist/
+web/.vite/
+*.tsbuildinfo
+
+# ---- Go embed (由 tools/sync-web-dist 生成,不提交) ----
+internal/webui/dist/
+
+# ---- Release 构建产物 ----
+/release/
+/artifacts/
+*.zip
+*.tar.gz
+/checksums.txt
+
+# ---- IDE / editor ----
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# ---- Misc ----
+*.log
+/tmp/

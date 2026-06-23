@@ -1,0 +1,148 @@
+# frp-warden Release 工作流。
+#
+# 打 tag 时自动构建多平台 Release 产物,创建 GitHub Release 并上传。
+# 触发条件:push tag v* (如 v0.1.0、v0.1.0-rc1)。
+#
+# 流程:前端构建 → sync-web-dist → 多平台 Go 交叉编译 → 打包 → 生成 checksums → 创建 Release。
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  release:
+    name: 构建并发布
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # 版本信息。
+      - name: 提取版本信息
+        id: version
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="${GITHUB_SHA::8}"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "built_at=${BUILT_AT}" >> "$GITHUB_OUTPUT"
+          # 判断是否为预发布(包含 -rc / -beta / -alpha)。
+          if echo "${VERSION}" | grep -qE '\-(rc|beta|alpha)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 前端构建。
+      - name: 前端依赖安装
+        working-directory: web
+        run: npm ci || npm install
+      - name: 前端类型检查
+        working-directory: web
+        run: npm run type-check
+      - name: 前端构建
+        working-directory: web
+        run: npm run build
+
+      # 同步 dist 到 internal/webui/dist 供 Go embed。
+      - name: 同步前端资源
+        run: go run ./tools/sync-web-dist
+
+      # 多平台构建。
+      - name: 构建所有平台产物
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          COMMIT: ${{ steps.version.outputs.commit }}
+          BUILT_AT: ${{ steps.version.outputs.built_at }}
+        run: |
+          mkdir -p release
+          LDFLAGS="-s -w -X 'github.com/fengheasia/frp-warden/internal/version.Version=${VERSION}' -X 'github.com/fengheasia/frp-warden/internal/version.Commit=${COMMIT}' -X 'github.com/fengheasia/frp-warden/internal/version.BuildDate=${BUILT_AT}'"
+
+          build_one() {
+            local goos=$1 goarch=$2 goarm=${3:-}
+            local label="${goos}_${goarch}${goarm:+v${goarm}}"
+            local ext=""; [ "$goos" = "windows" ] && ext=".exe"
+            local bin="frp-warden${ext}"
+            local archive="frp-warden_${VERSION}_${label}"
+
+            echo "构建 ${label}..."
+            GOOS=$goos GOARCH=$goarch GOARM=$goarm go build -trimpath -ldflags "${LDFLAGS}" -o "release/${bin}" ./cmd/frp-warden
+
+            # 打包:Linux 用 tar.gz,Windows 用 zip。
+            cd release
+            if [ "$goos" = "windows" ]; then
+              zip "${archive}.zip" "${bin}" ../README.md ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
+            else
+              tar czf "${archive}.tar.gz" "${bin}" ../README.md ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
+            fi
+            rm -f "${bin}"
+            cd ..
+          }
+
+          build_one windows amd64
+          build_one windows 386
+          build_one linux amd64
+          build_one linux 386
+          build_one linux arm64
+          build_one linux arm 7
+
+      # 生成 checksums。
+      - name: 生成 checksums.txt
+        working-directory: release
+        run: sha256sum *.zip *.tar.gz > checksums.txt
+
+      # 创建 GitHub Release。
+      - name: 创建 GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.version.outputs.version }}
+          prerelease: ${{ steps.version.outputs.prerelease }}
+          body: |
+            ## frp-warden ${{ steps.version.outputs.version }}
+
+            内嵌 WebUI 的多平台单二进制发布。
+
+            ### 构建信息
+            - 版本: `${{ steps.version.outputs.version }}`
+            - Commit: `${{ steps.version.outputs.commit }}`
+            - 构建时间: `${{ steps.version.outputs.built_at }}`
+
+            ### 支持平台
+            - Windows: amd64, 386
+            - Linux: amd64, 386, arm64, armv7
+
+            ### 快速开始
+            1. 下载对应平台的压缩包并解压。
+            2. 运行 `./frp-warden`（首次启动自动生成配置文件、数据库和管理员账号）。
+            3. 访问 `http://服务器IP:8080` 打开管理后台。
+            4. 详细配置见 [docs/CONFIGURATION.md](docs/CONFIGURATION.md)。
+
+            ### 安全提醒
+            - 管理员初始密码随机生成,仅在首次启动时显示一次,请妥善保存。
+            - frps plugin 接口默认监听 `127.0.0.1:9000`,切勿暴露到公网。
+          files: |
+            release/*.zip
+            release/*.tar.gz
+            release/checksums.txt
+          fail_on_unmatched_files: true

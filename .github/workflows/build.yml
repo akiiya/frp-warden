@@ -1,0 +1,70 @@
+# frp-warden CI 工作流。
+#
+# 在 push 到 dev/main 和 PR 到 main 时运行,验证前端构建、Go 测试和多平台编译。
+# 不上传 Release 产物(由 release.yml 处理)。
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  CGO_ENABLED: "0"
+
+jobs:
+  build-and-test:
+    name: CI build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      # 前端构建。
+      - name: 前端依赖安装
+        working-directory: web
+        run: npm ci || npm install
+      - name: 前端类型检查
+        working-directory: web
+        run: npm run type-check
+      - name: 前端构建
+        working-directory: web
+        run: npm run build
+
+      # 同步 dist 到 internal/webui/dist 供 Go embed。
+      - name: 同步前端资源
+        run: go run ./tools/sync-web-dist
+
+      # Go 检查与测试。
+      - name: gofmt 检查
+        run: |
+          fmt_out=$(gofmt -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "以下文件未通过 gofmt:"; echo "$fmt_out"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+      # 验证多平台编译(不上传产物)。
+      - name: 验证 linux/amd64 编译
+        env: { GOOS: linux, GOARCH: amd64 }
+        run: go build -o /dev/null ./cmd/frp-warden
+      - name: 验证 windows/amd64 编译
+        env: { GOOS: windows, GOARCH: amd64 }
+        run: go build -o /dev/null ./cmd/frp-warden
