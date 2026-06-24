@@ -1,12 +1,12 @@
 # frp-warden CI 工作流。
 #
-# 在 push 到 dev/main 和 PR 到 main 时运行,验证前端构建、Go 测试和多平台编译。
-# 不上传 Release 产物(由 release.yml 处理)。
+# 触发条件:push 到 dev、PR 到 main。
+# 职责:验证前端构建、Go 测试、多平台编译。不创建 tag,不创建 Release。
 name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [dev]
   pull_request:
     branches: [main]
 

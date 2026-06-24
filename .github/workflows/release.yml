@@ -1,15 +1,20 @@
 # frp-warden Release 工作流。
 #
-# 打 tag 时自动构建多平台 Release 产物,创建 GitHub Release 并上传。
-# 触发条件:push tag v* (如 v0.1.0、v0.1.0-rc1)。
+# 触发条件:push 到 main(即 PR 合并后自动触发)。
+# 流程:读取 VERSION → 测试 → 前端构建 → sync-web-dist → 多平台构建 → 创建 tag → 创建 Release。
 #
-# 流程:前端构建 → sync-web-dist → 多平台 Go 交叉编译 → 打包 → 生成 checksums → 创建 Release。
+# 设计原则:
+#   - VERSION 文件控制版本号,不带 v 前缀;tag 名为 v${VERSION}。
+#   - tag 已存在时明确失败,提示更新 VERSION。
+#   - 创建 tag 和 Release 在同一个 workflow 内完成(不依赖 tag push 触发另一个 workflow)。
+#   - main 分支受保护,只能通过 PR 合并;Release 由 main push 自动触发。
 name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:  # 手动触发备用
 
 permissions:
   contents: write
@@ -19,9 +24,10 @@ env:
 
 jobs:
   release:
-    name: 构建并发布
+    name: 测试、构建并发布
     runs-on: ubuntu-latest
     steps:
+      # 1. checkout,必须 fetch tags(用于检查 tag 是否已存在)。
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -37,24 +43,33 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      # 版本信息。
-      - name: 提取版本信息
+      # 2. 读取 VERSION 并校验。
+      - name: 读取 VERSION
         id: version
         run: |
-          VERSION="${GITHUB_REF_NAME}"
-          COMMIT="${GITHUB_SHA::8}"
-          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          if [ -z "$VERSION" ]; then
+            echo "::error::VERSION 文件为空"
+            exit 1
+          fi
+          if echo "$VERSION" | grep -q '^v'; then
+            echo "::error::VERSION 不应包含 v 前缀,当前值: $VERSION"
+            exit 1
+          fi
+          TAG_NAME="v${VERSION}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
-          echo "built_at=${BUILT_AT}" >> "$GITHUB_OUTPUT"
-          # 判断是否为预发布(包含 -rc / -beta / -alpha)。
-          if echo "${VERSION}" | grep -qE '\-(rc|beta|alpha)'; then
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          echo "tag_name=${TAG_NAME}" >> "$GITHUB_OUTPUT"
+
+      # 3. 检查 tag 是否已存在。
+      - name: 检查 tag 是否已存在
+        run: |
+          TAG_NAME="${{ steps.version.outputs.tag_name }}"
+          if git rev-parse "$TAG_NAME" >/dev/null 2>&1; then
+            echo "::error::tag $TAG_NAME 已存在。当前 VERSION (${{ steps.version.outputs.version }}) 已发布。请在 dev 分支更新 VERSION 后重新合并 main。"
+            exit 1
           fi
 
-      # 前端构建。
+      # 4. 前端构建。
       - name: 前端依赖安装
         working-directory: web
         run: npm ci || npm install
@@ -65,16 +80,44 @@ jobs:
         working-directory: web
         run: npm run build
 
-      # 同步 dist 到 internal/webui/dist 供 Go embed。
+      # 5. 同步前端资源到 internal/webui/dist。
       - name: 同步前端资源
         run: go run ./tools/sync-web-dist
 
-      # 多平台构建。
+      # 6. Go 检查与测试。
+      - name: gofmt 检查
+        run: |
+          fmt_out=$(gofmt -l .)
+          if [ -n "$fmt_out" ]; then
+            echo "以下文件未通过 gofmt:"; echo "$fmt_out"; exit 1
+          fi
+      - name: go vet
+        run: go vet ./...
+      - name: go test
+        run: go test ./...
+
+      # 7. 提取版本信息。
+      - name: 提取版本信息
+        id: info
+        run: |
+          COMMIT="${GITHUB_SHA::8}"
+          BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
+          echo "built_at=${BUILT_AT}" >> "$GITHUB_OUTPUT"
+          # 判断是否为预发布。
+          VERSION="${{ steps.version.outputs.version }}"
+          if echo "$VERSION" | grep -qE '(rc|beta|alpha)'; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 8. 多平台构建。
       - name: 构建所有平台产物
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-          COMMIT: ${{ steps.version.outputs.commit }}
-          BUILT_AT: ${{ steps.version.outputs.built_at }}
+          VERSION: ${{ steps.version.outputs.tag_name }}
+          COMMIT: ${{ steps.info.outputs.commit }}
+          BUILT_AT: ${{ steps.info.outputs.built_at }}
         run: |
           mkdir -p release
           LDFLAGS="-s -w -X 'github.com/fengheasia/frp-warden/internal/version.Version=${VERSION}' -X 'github.com/fengheasia/frp-warden/internal/version.Commit=${COMMIT}' -X 'github.com/fengheasia/frp-warden/internal/version.BuildDate=${BUILT_AT}'"
@@ -89,12 +132,11 @@ jobs:
             echo "构建 ${label}..."
             GOOS=$goos GOARCH=$goarch GOARM=$goarm go build -trimpath -ldflags "${LDFLAGS}" -o "release/${bin}" ./cmd/frp-warden
 
-            # 打包:Linux 用 tar.gz,Windows 用 zip。
             cd release
             if [ "$goos" = "windows" ]; then
-              zip "${archive}.zip" "${bin}" ../README.md ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
+              zip "${archive}.zip" "${bin}" ../README.md ../LICENSE ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
             else
-              tar czf "${archive}.tar.gz" "${bin}" ../README.md ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
+              tar czf "${archive}.tar.gz" "${bin}" ../README.md ../LICENSE ../docs/CONFIGURATION.md ../docs/FRP_PLUGIN.md
             fi
             rm -f "${bin}"
             cd ..
@@ -107,26 +149,36 @@ jobs:
           build_one linux arm64
           build_one linux arm 7
 
-      # 生成 checksums。
+      # 9. 生成 checksums。
       - name: 生成 checksums.txt
         working-directory: release
         run: sha256sum *.zip *.tar.gz > checksums.txt
 
-      # 创建 GitHub Release。
+      # 10. 创建 tag 并 push。
+      - name: 创建并推送 tag
+        run: |
+          TAG_NAME="${{ steps.version.outputs.tag_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG_NAME" -m "Release $TAG_NAME"
+          git push origin "$TAG_NAME"
+
+      # 11. 创建 GitHub Release 并上传资产。
       - name: 创建 GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ steps.version.outputs.version }}
-          prerelease: ${{ steps.version.outputs.prerelease }}
+          tag_name: ${{ steps.version.outputs.tag_name }}
+          name: ${{ steps.version.outputs.tag_name }}
+          prerelease: ${{ steps.info.outputs.prerelease }}
           body: |
-            ## frp-warden ${{ steps.version.outputs.version }}
+            ## frp-warden ${{ steps.version.outputs.tag_name }}
 
             内嵌 WebUI 的多平台单二进制发布。
 
             ### 构建信息
-            - 版本: `${{ steps.version.outputs.version }}`
-            - Commit: `${{ steps.version.outputs.commit }}`
-            - 构建时间: `${{ steps.version.outputs.built_at }}`
+            - 版本: `${{ steps.version.outputs.tag_name }}`
+            - Commit: `${{ steps.info.outputs.commit }}`
+            - 构建时间: `${{ steps.info.outputs.built_at }}`
 
             ### 支持平台
             - Windows: amd64, 386

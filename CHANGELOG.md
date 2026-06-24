@@ -3,7 +3,7 @@
 本文件记录 frp-warden 的重要变更。格式参考 [Keep a Changelog](https://keepachangelog.com/),
 遵循 [语义化版本](https://semver.org/)。
 
-## [v0.1.0-rc1] - 准备中
+## v0.1.0-rc1
 
 ### 新增
 

@@ -16,12 +16,20 @@
 - 建议要求 CI 通过后才能合并。
 - 建议要求至少 1 个 review。
 
+## 版本控制
+
+版本号由根目录 `VERSION` 文件唯一控制。
+
+- `VERSION` 文件内容不带 `v` 前缀,例如 `0.1.0-rc1`。
+- Release workflow 读取 `VERSION` 后生成 tag `v0.1.0-rc1`。
+- `VERSION` 文件必须通过 `dev → PR → main` 流程修改。
+- 不要手动在 main 上修改 `VERSION`。
+
 ## CI
 
 CI workflow (`.github/workflows/build.yml`) 在以下情况运行:
 
 - push 到 `dev`
-- push 到 `main`
 - PR 到 `main`
 
 CI 任务:
@@ -31,49 +39,53 @@ CI 任务:
 3. Go 检查(gofmt + vet + test)
 4. 多平台编译验证
 
-CI 不上传 Release 产物。
+CI **不**创建 tag,不创建 Release。
 
 ## Release
 
-Release workflow (`.github/workflows/release.yml`) 在打 tag 时触发。
+Release workflow (`.github/workflows/release.yml`) 在 **push 到 main** 时自动触发。
 
-### tag 命名
+### 发布流程
 
-- 正式版: `v0.1.0`、`v0.2.0`
-- 预发布: `v0.1.0-rc1`、`v0.1.0-beta1`、`v0.1.0-alpha1`
+1. 在 `dev` 分支修改代码。
+2. 如果准备发布,修改 `VERSION` 文件(例如改为 `0.2.0`)。
+3. push `dev`。
+4. 创建 PR 到 `main`。
+5. CI 通过后合并 PR。
+6. `main` push 自动触发 Release workflow。
+7. workflow 读取 `VERSION`,生成 tag `v${VERSION}`。
+8. 如果 tag 已存在,workflow **明确失败**,提示更新 `VERSION`。
+9. workflow 执行:前端构建 → sync-web-dist → Go 测试 → 多平台构建 → 创建 tag → 创建 Release → 上传资产。
 
-### 如何触发 Release
+### 不需要人工打 tag
 
-```sh
-# 1. 确保 main 分支代码是最新的
-git checkout main
-git pull origin main
+`main` 分支合并后,Release workflow 自动完成所有操作,包括创建 tag。
 
-# 2. 打 tag
-git tag v0.1.0-rc1
+### tag 已存在时的行为
 
-# 3. 推送 tag
-git push origin v0.1.0-rc1
-```
+如果 `VERSION` 对应的 tag 已存在,workflow 会明确失败,并提示:
 
-推送 tag 后,Release workflow 自动运行:
+> 当前 VERSION 已发布。请在 dev 分支更新 VERSION 后重新合并 main。
 
-1. 前端构建
-2. 同步前端资源
-3. 6 平台交叉编译(CGO_ENABLED=0)
-4. 打包(zip/tar.gz)
-5. 生成 checksums.txt
-6. 创建 GitHub Release 并上传产物
+解决方法:在 `dev` 分支更新 `VERSION` 文件,重新 PR 合并 `main`。
 
-### 查看 artifacts
+### tag 命名规则
 
-在 GitHub 仓库的 Actions 页面查看 workflow 运行状态。完成后,在 Releases 页面
-查看上传的产物。
+- `VERSION = 0.1.0-rc1` → tag = `v0.1.0-rc1`
+- `VERSION = 0.2.0` → tag = `v0.2.0`
 
 ### 预发布判断
 
-- tag 含 `-rc`/`-beta`/`-alpha` 时,标记为 prerelease。
+- `VERSION` 包含 `rc`/`beta`/`alpha` 时,标记为 prerelease。
 - 否则标记为正式 release。
+
+### 手动触发
+
+Release workflow 支持 `workflow_dispatch` 手动触发(备用),但主流程是 main push 自动触发。
+
+## tag ruleset
+
+如果仓库启用了 tag ruleset,需要允许 `github-actions[bot]` 创建 `v*` tag。
 
 ## 不要提交的文件
 
@@ -87,12 +99,14 @@ git push origin v0.1.0-rc1
 - `*.zip`、`*.tar.gz` — 压缩包
 - `node_modules/` — 前端依赖
 
-## 版本信息
+`VERSION` 文件**不**被忽略,必须提交到仓库。
+
+## 版本信息注入
 
 构建时通过 ldflags 注入版本信息:
 
-- `Version`: tag 名或 `0.0.0-dev`
-- `Commit`: git commit hash
+- `Version`: tag 名(如 `v0.1.0-rc1`)
+- `Commit`: git commit hash 前 8 位
 - `BuildDate`: UTC 构建时间
 
 ```sh
