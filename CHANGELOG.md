@@ -3,6 +3,22 @@
 本文件记录 frp-warden 的重要变更。格式参考 [Keep a Changelog](https://keepachangelog.com/),
 遵循 [语义化版本](https://semver.org/)。
 
+## v0.1.0-rc2
+
+### 变更
+
+- 基于 v0.1.0-rc1 的重新构建:修正 git 历史中的作者邮箱( contributors 修正)。
+- 功能代码与 v0.1.0-rc1 完全一致,无业务逻辑改动。
+- 二进制 `-version` 显示的 commit 哈希与当前历史一致。
+
+### 已知限制
+
+- MySQL/MariaDB/PostgreSQL 迁移尚未完整实现。
+- Docker 尚未提供。
+- SBOM/签名尚未提供。
+- 暗色主题尚未实现。
+- CloseProxy 暂未启用。
+
 ## v0.1.0-rc1
 
 ### 新增
