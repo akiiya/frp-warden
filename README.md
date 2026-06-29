@@ -5,7 +5,7 @@
 frp-warden 是 [frp](https://github.com/fatedier/frp) 的多租户授权控制面板。
 它决定**哪个设备可以使用哪个子域名或公网端口**,并通过 frps server plugin 机制强制执行。
 
-**状态:v0.1.0-rc 准备中。** 已完成 Phase 0~10,首个候选发布版本准备就绪。
+**状态:早期开发中。** 已完成 Phase 0~10,版本号由 `VERSION` 文件控制。
 
 ## 核心能力
 
