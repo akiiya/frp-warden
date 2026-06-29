@@ -57,7 +57,7 @@ tenant/resource/grant/proxy 核心数据模型与唯一约束、frps plugin Logi
 前端内嵌进 Go 二进制、frpc 配置生成、GitHub Actions Release 多平台构建,以及
 **Phase 10(发布前清理、安装部署文档、端到端冒烟测试准备)**。
 数据库目前仅 **SQLite 完整可用**(纯 Go 驱动,无 CGO);MySQL/MariaDB/PostgreSQL
-仅有连接骨架,迁移未实现(fail fast)。**状态:v0.1.0-rc 准备中。** 版本号由根目录 `VERSION` 文件控制;main 合并后自动发布。
+仅有连接骨架,迁移未实现(fail fast)。**状态:早期开发中。** 版本号由根目录 `VERSION` 文件控制;main 合并后自动发布。
 
 ## 任务结束必须输出(固定格式)
 
