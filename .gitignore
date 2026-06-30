@@ -2,6 +2,8 @@
 /frp-warden
 /frp-warden.exe
 /dist/
+/release/
+/artifacts/
 *.exe
 *.test
 *.out

@@ -1,27 +1,19 @@
-// Package version 暴露 frp-warden 的构建元信息。
+// Package version 暴露构建版本信息。
 //
-// 下列变量可在构建时通过 -ldflags 覆盖，例如：
+// 版本号唯一来源是 Git tag:
+//   - 正式版本号 = 推送的 vX.Y.Z tag 去掉前缀 v,由 ldflags 注入。
+//   - 日常 / CI 构建由 git describe 派生。
 //
-//	go build -ldflags "-X github.com/fengheasia/frp-warden/internal/version.Version=v0.1.0"
+// 缺省值为 dev。启动日志通过 version.String() 打印,便于运维核对版本。
 package version
 
-// 构建元信息。默认值用于本地/开发构建；CI 通过 -ldflags 覆盖，
-// 使发布的二进制报告真实版本。
-var (
-	// Name 是项目/二进制名称。
-	Name = "frp-warden"
+// Version 是构建版本号;由 ldflags 注入,缺省为 dev。
+var Version = "dev"
 
-	// Version 是构建的语义化版本（如 v0.1.0）。
-	Version = "0.0.0-dev"
-
-	// Commit 是构建所基于的 git 短哈希。
-	Commit = "unknown"
-
-	// BuildDate 是 UTC 构建时间戳（RFC3339）。
-	BuildDate = "unknown"
-)
+// Name 是二进制名称。
+var Name = "frp-warden"
 
 // String 返回单行、便于阅读的版本摘要。
 func String() string {
-	return Name + " " + Version + " (commit " + Commit + ", built " + BuildDate + ")"
+	return Name + " " + Version
 }

@@ -1,6 +1,6 @@
 # 0017 — VERSION 文件控制版本与 main 自动发布
 
-- 状态:已接受
+- 状态:**已被取代** (superseded),见 [0018 — Git tag 触发发布](0018-git-tag-release.md)
 - 日期:2026-06-23
 
 ## 背景

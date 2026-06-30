@@ -3,6 +3,17 @@
 本文件记录 frp-warden 的重要变更。格式参考 [Keep a Changelog](https://keepachangelog.com/),
 遵循 [语义化版本](https://semver.org/)。
 
+## 未发布
+
+### 变更
+
+- **发布流程改造为 Git tag 触发(取代 VERSION 文件)**:版本号以 `vX.Y.Z` tag 为唯一来源,
+  发版 = 打新 tag,由 GitHub Actions 自动测试/打包/发布。详见 [ADR 0018](docs/DECISIONS/0018-git-tag-release.md)。
+- 删除 `VERSION` 文件及读取逻辑;删除旧 `build.yml`(由 `ci.yml` 取代)。
+- 新增 `scripts/build.sh`、`scripts/release.sh`、`Makefile`。
+- `internal/version` 简化为 `Version`(默认 `dev`,ldflags 注入),`main` 合并不再自动发版。
+- 平台产物归档目录统一为 `dist/`。
+
 ## v0.1.0-rc2
 
 ### 变更

@@ -1,0 +1,6 @@
+# 强制脚本与配置以 LF 存入仓库,避免 CRLF 在 CI(ubuntu)上破坏 bash shebang / Makefile。
+*.sh     text eol=lf
+Makefile text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.go     text eol=lf
